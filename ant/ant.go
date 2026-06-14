@@ -18,8 +18,10 @@ package ant
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/tamnd/any-cli/kit"
@@ -32,6 +34,13 @@ type Engine struct {
 	host *kit.Host
 	root string           // the data tree root ($HOME/data, ANT_DATA-overridable)
 	now  func() time.Time // the fetch clock, injectable so tests are deterministic
+
+	// llMu guards llCache, the in-memory index of materialized URIs keyed by the
+	// listing prefix. A directory walk runs once per prefix; every cache-write
+	// folds the new URI into the matching listings, so repeat reads (the web
+	// console's dashboard and browse pages) never re-walk the tree. See LL.
+	llMu    sync.RWMutex
+	llCache map[string][]string
 }
 
 // Option customizes an Engine at New.
@@ -49,7 +58,7 @@ func New(opts ...Option) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Engine{host: h, now: time.Now}
+	e := &Engine{host: h, now: time.Now, llCache: map[string][]string{}}
 	for _, o := range opts {
 		o(e)
 	}
@@ -61,6 +70,17 @@ func New(opts ...Option) (*Engine, error) {
 
 // Root returns the data tree root the Engine writes under.
 func (e *Engine) Root() string { return e.root }
+
+// WarmIndex pre-populates the in-memory LL index for every registered domain, so
+// the first browse or dashboard request is served from memory rather than paying
+// for a cold filesystem walk. It walks only ant's own domain subtrees, never the
+// whole shared data root. A long-lived process (ant serve) calls this once in the
+// background at startup; it is a no-op to call again.
+func (e *Engine) WarmIndex() {
+	for _, scheme := range e.host.Domains() {
+		_, _ = e.LL(scheme + "://")
+	}
+}
 
 // Domains returns the registered domains the Engine can address, sorted by
 // scheme. It is the analogue of sql.Drivers and backs `ant domains`.
@@ -80,6 +100,24 @@ func (e *Engine) Domains() []DomainInfo {
 		}
 	}
 	return out
+}
+
+// Domain returns the descriptor of a single registered domain by scheme or
+// alias, the lookup the web console uses to render one domain's detail page.
+func (e *Engine) Domain(scheme string) (DomainInfo, bool) {
+	info, ok := e.host.Domain(scheme)
+	if !ok {
+		return DomainInfo{}, false
+	}
+	return DomainInfo{
+		Scheme:  info.Scheme,
+		Aliases: info.Aliases,
+		Hosts:   info.Hosts,
+		Binary:  info.Identity.Binary,
+		Short:   info.Identity.Short,
+		Site:    info.Identity.Site,
+		Repo:    info.Identity.Repo,
+	}, true
 }
 
 // DomainInfo is one registered domain, as `ant domains` prints it.
@@ -132,6 +170,68 @@ func (e *Engine) List(ctx context.Context, u kit.URI, limit int) ([]kit.Envelope
 		out = append(out, env)
 	}
 	return out, nil
+}
+
+// Searchable reports whether a domain (by scheme or alias) supports free-text
+// search, so the web console can decide to show a search box for it.
+func (e *Engine) Searchable(scheme string) bool { return e.host.Searchable(scheme) }
+
+// Search runs a domain's free-text search and returns the hits as envelopes. A
+// hit that is URI-addressable carries its canonical @id, so it links straight to
+// get; one that is not still surfaces, wrapped with the scheme as @type and no
+// @id. limit caps the result (0 means the op's own default). Search hits are
+// previews and are not written to the data tree; dereferencing one caches it.
+func (e *Engine) Search(ctx context.Context, scheme, query string, limit int) ([]kit.Envelope, error) {
+	recs, err := e.host.Search(ctx, scheme, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]kit.Envelope, 0, len(recs))
+	for _, rec := range recs {
+		env, err := e.host.Wrap(rec, e.now())
+		if err != nil {
+			env = kit.Envelope{Type: scheme, Data: rec}
+		}
+		// A search hit often is not itself a mintable resource (it is a preview
+		// shape, not the record type), so Wrap leaves @id empty. When the hit
+		// carries a site URL, resolve it back to the canonical URI so the result is
+		// still one click from its record.
+		if env.ID == "" {
+			if u, ok := e.uriFromHit(scheme, rec); ok {
+				env.ID = u.String()
+				env.Type = u.Scheme + "/" + u.Authority
+			}
+		}
+		out = append(out, env)
+	}
+	return out, nil
+}
+
+// uriFromHit recovers a canonical URI from a search hit that did not mint one, by
+// resolving a URL-bearing field (url/link/href) through the domain. It is how a
+// preview-shaped result becomes dereferenceable.
+func (e *Engine) uriFromHit(scheme string, rec any) (kit.URI, bool) {
+	blob, err := json.Marshal(rec)
+	if err != nil {
+		return kit.URI{}, false
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(blob, &fields); err != nil {
+		return kit.URI{}, false
+	}
+	for _, key := range []string{"url", "link", "href", "permalink"} {
+		s, ok := fields[key].(string)
+		if !ok || s == "" {
+			continue
+		}
+		if u, err := e.Resolve(s, ""); err == nil {
+			return u, true
+		}
+		if u, err := e.Resolve(s, scheme); err == nil {
+			return u, true
+		}
+	}
+	return kit.URI{}, false
 }
 
 // Links fetches a URI's record and returns its outbound graph edges as URIs.

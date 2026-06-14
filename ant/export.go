@@ -96,6 +96,12 @@ func (e *Engine) writeEnvelope(u kit.URI, env kit.Envelope, asMarkdown bool) ([]
 	if err := os.WriteFile(jsonPath, append(blob, '\n'), 0o644); err != nil {
 		return nil, err
 	}
+	// Keep the in-memory LL index consistent with what just hit disk, so a record
+	// fetched mid-session shows up in browse without a re-walk. Derive the URI from
+	// the path so it matches the exact string form LL stores.
+	if uri, ok := e.pathToURI(jsonPath); ok {
+		e.indexAdd(uri)
+	}
 	written := []string{jsonPath}
 
 	if asMarkdown {
@@ -132,9 +138,37 @@ func (e *Engine) Import(path string) (map[string]any, error) {
 }
 
 // LL lists the record URIs already materialized on disk under a URI prefix. An
-// empty prefix lists the whole tree. It is pure filesystem work, so it is fast
-// and offline.
+// empty prefix lists the whole tree. The first call for a prefix walks the
+// filesystem; the result is held in an in-memory index, and every later
+// cache-write folds the new URI into the matching listings (indexAdd), so a
+// repeat call returns from memory without touching disk. This is what keeps the
+// web console's dashboard and browse pages fast as the data tree grows. A
+// long-lived process (ant serve) is the only writer of its own tree, so the
+// index stays consistent for the session; an external write lands on the next
+// restart.
 func (e *Engine) LL(prefix string) ([]string, error) {
+	key := canonPrefix(prefix)
+	e.llMu.RLock()
+	if uris, ok := e.llCache[key]; ok {
+		e.llMu.RUnlock()
+		return uris, nil
+	}
+	e.llMu.RUnlock()
+
+	uris, err := e.scanLL(prefix)
+	if err != nil {
+		return nil, err
+	}
+	e.llMu.Lock()
+	e.llCache[key] = uris
+	e.llMu.Unlock()
+	return uris, nil
+}
+
+// scanLL is the filesystem walk behind LL: it lists every .json record under the
+// prefix's data path. It is pure filesystem work, offline, and runs once per
+// prefix before the in-memory index serves the rest.
+func (e *Engine) scanLL(prefix string) ([]string, error) {
 	sub := prefixDir(prefix)
 	dir := filepath.Join(e.root, filepath.FromSlash(sub))
 
@@ -170,6 +204,28 @@ func (e *Engine) LL(prefix string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// indexAdd folds a freshly written URI into every cached LL listing it belongs
+// to, keeping the in-memory index warm and consistent after a cache-write
+// without re-walking the tree. It mirrors LL's own prefix filter so the index
+// matches what a fresh walk would return.
+func (e *Engine) indexAdd(uri string) {
+	e.llMu.Lock()
+	defer e.llMu.Unlock()
+	for key, uris := range e.llCache {
+		if key != "" && !strings.HasPrefix(uri, canonPrefix(key)) {
+			continue
+		}
+		i := sort.SearchStrings(uris, uri)
+		if i < len(uris) && uris[i] == uri {
+			continue // already indexed
+		}
+		uris = append(uris, "")
+		copy(uris[i+1:], uris[i:])
+		uris[i] = uri
+		e.llCache[key] = uris
+	}
 }
 
 // pathToURI reverses dataFile: it turns an on-disk record path back into its

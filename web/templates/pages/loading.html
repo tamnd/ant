@@ -1,0 +1,19 @@
+{{define "content"}}
+{{$p := .Page}}
+{{template "crumbs" $p.Crumbs}}
+
+<header class="page-head">
+  <h1 class="page-title">Fetching…</h1>
+  <p class="page-sub"><code>{{$p.URI}}</code></p>
+</header>
+
+<div class="card loading-card" id="fetch" data-status="{{$p.StatusURL}}">
+  <span class="spinner" aria-hidden="true"></span>
+  <div class="loading-body">
+    <p class="loading-title">Fetching from <strong>{{$p.Scheme}}</strong>…</p>
+    <p class="muted">Getting the {{$p.Kind}} for <code>{{$p.URI}}</code>. This page reloads on its own the moment it is ready, then it is cached, so the next visit is instant.</p>
+    {{if $p.LiveURL}}<p class="muted">Source: <a class="ext" href="{{$p.LiveURL}}" target="_blank" rel="noopener noreferrer">{{$p.LiveURL}} ↗</a></p>{{end}}
+  </div>
+  <noscript><meta http-equiv="refresh" content="2"></noscript>
+</div>
+{{end}}

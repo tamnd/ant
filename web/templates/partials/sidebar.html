@@ -1,0 +1,43 @@
+{{define "sidebar"}}
+<aside class="sidebar">
+  <a class="brand" href="/">
+    <img class="brand-mark" src="/assets/ant.svg?v={{.AssetV}}" alt="" width="28" height="28">
+    <span class="brand-name">ant</span>
+  </a>
+
+  <nav class="nav" aria-label="Primary">
+    <a class="nav-link{{if eq .Active "home"}} is-active{{end}}" href="/">
+      {{template "icon" "home"}}<span>Dashboard</span>
+    </a>
+    <a class="nav-link{{if eq .Active "browse"}} is-active{{end}}" href="/browse">
+      {{template "icon" "folder"}}<span>Browse</span>
+    </a>
+    <a class="nav-link{{if eq .Active "search"}} is-active{{end}}" href="/search">
+      {{template "icon" "search"}}<span>Search</span>
+    </a>
+    <a class="nav-link{{if eq .Active "resolve"}} is-active{{end}}" href="/resolve">
+      {{template "icon" "resolve"}}<span>Resolve</span>
+    </a>
+    <a class="nav-link{{if eq .Active "about"}} is-active{{end}}" href="/about">
+      {{template "icon" "info"}}<span>About</span>
+    </a>
+  </nav>
+
+  <div class="nav-section">
+    <div class="nav-section-title">Domains</div>
+    <nav class="nav" aria-label="Domains">
+      {{range .Domains}}
+      <a class="nav-link nav-domain" href="{{.Href}}">
+        <span class="dot" style="background:{{.Accent}}"></span>
+        <span class="nav-domain-name">{{.Scheme}}</span>
+        {{if .Search}}<span class="nav-flag" title="searchable">{{template "icon" "search"}}</span>{{end}}
+      </a>
+      {{end}}
+    </nav>
+  </div>
+
+  <div class="sidebar-foot">
+    <span class="muted">ant {{.Version}}</span>
+  </div>
+</aside>
+{{end}}

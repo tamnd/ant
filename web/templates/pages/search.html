@@ -1,0 +1,48 @@
+{{define "content"}}
+{{$p := .Page}}
+<header class="page-head">
+  <h1 class="page-title">Search</h1>
+  <p class="page-sub">Run a domain's free-text search. Results open cache-first.</p>
+</header>
+
+<form class="card form search-form" action="/search" method="get" role="search">
+  <div class="field field-grow">
+    <label for="q">Query</label>
+    <input id="q" type="text" name="q" value="{{$p.Query}}" autocomplete="off"
+           placeholder="hyperion, alan turing, lofi beats…" autofocus>
+  </div>
+  <div class="field">
+    <label for="on">Domain</label>
+    <select id="on" name="on">
+      {{range $p.Schemes}}<option value="{{.}}"{{if eq . $p.Scheme}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </div>
+  <div class="field field-narrow">
+    <label for="n">Limit</label>
+    <input id="n" type="number" name="n" min="1" max="100" value="{{if $p.N}}{{$p.N}}{{else}}20{{end}}">
+  </div>
+  <div class="field field-action">
+    <button class="btn btn-primary" type="submit">{{template "icon" "search"}}<span>Search</span></button>
+  </div>
+</form>
+
+{{if not $p.Schemes}}
+<div class="banner banner-warn">No registered domain supports search yet.</div>
+{{end}}
+
+{{if $p.Err}}<div class="banner banner-err">{{$p.Err}}</div>{{end}}
+
+{{if $p.Searched}}
+  {{if $p.Cards}}
+  <h2 class="section-title">{{len $p.Cards}} result(s) for &ldquo;{{$p.Query}}&rdquo; on {{$p.Scheme}}</h2>
+  <div class="grid grid-cards">
+    {{range $p.Cards}}{{template "card" .}}{{end}}
+  </div>
+  {{else}}
+  <div class="empty">
+    {{template "icon" "search"}}
+    <p>No results for &ldquo;{{$p.Query}}&rdquo; on {{$p.Scheme}}.</p>
+  </div>
+  {{end}}
+{{end}}
+{{end}}

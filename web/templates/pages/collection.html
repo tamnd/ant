@@ -1,0 +1,19 @@
+{{define "content"}}
+{{$p := .Page}}
+<header class="page-head">
+  <h1 class="page-title">Members</h1>
+  <p class="page-sub"><code>{{$p.URI}}</code></p>
+</header>
+
+{{if $p.Cards}}
+<div class="grid grid-cards">
+  {{range $p.Cards}}{{template "card" .}}{{end}}
+</div>
+{{else}}
+<div class="empty">
+  {{template "icon" "folder"}}
+  <p>This resource has no members, or none are cached yet.</p>
+  <a class="btn" href="{{viewHref $p.URI}}">Open the record</a>
+</div>
+{{end}}
+{{end}}

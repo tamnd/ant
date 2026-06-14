@@ -1,0 +1,44 @@
+{{define "content"}}
+{{$p := .Page}}{{$d := $p.Info}}
+<header class="res-head">
+  <div class="res-head-main">
+    <span class="dot dot-lg" style="background:{{$p.Accent}}"></span>
+    <div>
+      <h1 class="res-title">{{$d.Scheme}}</h1>
+      <div class="res-meta">
+        {{range $d.Aliases}}<span class="badge badge-soft">{{.}}</span>{{end}}
+        {{if $d.Binary}}<span class="muted">binary <code>{{$d.Binary}}</code></span>{{end}}
+      </div>
+    </div>
+  </div>
+  <div class="res-actions">
+    <a class="btn btn-ghost" href="{{browseHref (printf "%s://" $d.Scheme)}}">{{template "icon" "folder"}}<span>Browse</span></a>
+  </div>
+</header>
+
+{{if $d.Short}}<p class="lead">{{$d.Short}}</p>{{end}}
+
+<div class="res-grid">
+  <div class="res-main">
+    {{if $p.Examples}}
+    <div class="card">
+      <div class="card-title">Try one</div>
+      <div class="chips">
+        {{range $p.Examples}}<a class="chip" href="{{viewHref .}}">{{.}}</a>{{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+  <aside class="res-side">
+    <div class="card">
+      <div class="card-title">Details</div>
+      <dl class="kv kv-tight">
+        <dt class="kv-key">Scheme</dt><dd class="kv-val"><code>{{$d.Scheme}}://</code></dd>
+        {{if $d.Hosts}}<dt class="kv-key">Hosts</dt><dd class="kv-val">{{range $d.Hosts}}<span class="badge badge-soft">{{.}}</span>{{end}}</dd>{{end}}
+        {{if $d.Site}}<dt class="kv-key">Site</dt><dd class="kv-val"><a class="ext" href="{{$d.Site}}" target="_blank" rel="noopener noreferrer">{{$d.Site}} ↗</a></dd>{{end}}
+        {{if $d.Repo}}<dt class="kv-key">Repo</dt><dd class="kv-val"><a class="ext" href="{{$d.Repo}}" target="_blank" rel="noopener noreferrer">{{$d.Repo}} ↗</a></dd>{{end}}
+      </dl>
+    </div>
+  </aside>
+</div>
+{{end}}
