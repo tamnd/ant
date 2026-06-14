@@ -59,90 +59,92 @@ func newServeCmd() *cobra.Command {
 
 // dereferenceMux turns the URI namespace into dereferenceable linked data: a raw
 // URI path returns its record, and the query endpoints cover resolve/ls/links/url.
+//
+// It routes by hand rather than through http.ServeMux on purpose. A resource URI
+// in the path carries a "//" (GET /x://status/20), and ServeMux's path cleaning
+// would collapse that to "/" and 301-redirect before the handler ran. Dispatching
+// on the first path segment leaves the rest of the path untouched.
 func dereferenceMux(e *ant.Engine) http.Handler {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("ok\n"))
-	})
-
-	mux.HandleFunc("/resolve", func(w http.ResponseWriter, r *http.Request) {
-		u, err := e.Resolve(r.URL.Query().Get("input"), r.URL.Query().Get("on"))
-		if err != nil {
-			httpErr(w, http.StatusBadRequest, err)
-			return
-		}
-		httpJSON(w, map[string]string{"uri": u.String()})
-	})
-
-	mux.HandleFunc("/url", func(w http.ResponseWriter, r *http.Request) {
-		u, err := kit.ParseURI(r.URL.Query().Get("uri"))
-		if err != nil {
-			httpErr(w, http.StatusBadRequest, err)
-			return
-		}
-		loc, err := e.URL(u)
-		if err != nil {
-			httpErr(w, http.StatusBadRequest, err)
-			return
-		}
-		httpJSON(w, map[string]string{"url": loc})
-	})
-
-	mux.HandleFunc("/ls", func(w http.ResponseWriter, r *http.Request) {
-		u, err := kit.ParseURI(r.URL.Query().Get("uri"))
-		if err != nil {
-			httpErr(w, http.StatusBadRequest, err)
-			return
-		}
-		limit, _ := strconv.Atoi(r.URL.Query().Get("n"))
-		envs, err := e.List(r.Context(), u, limit)
-		if err != nil {
-			httpErr(w, http.StatusBadGateway, err)
-			return
-		}
-		httpJSON(w, envs)
-	})
-
-	mux.HandleFunc("/links", func(w http.ResponseWriter, r *http.Request) {
-		u, err := kit.ParseURI(r.URL.Query().Get("uri"))
-		if err != nil {
-			httpErr(w, http.StatusBadRequest, err)
-			return
-		}
-		links, err := e.Links(r.Context(), u)
-		if err != nil {
-			httpErr(w, http.StatusBadGateway, err)
-			return
-		}
-		out := make([]string, 0, len(links))
-		for _, lu := range links {
-			out = append(out, lu.String())
-		}
-		httpJSON(w, out)
-	})
-
-	// The catch-all: a raw URI in the path (GET /goodreads://book/2767052).
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := strings.TrimPrefix(r.URL.Path, "/")
-		if raw == "" {
+		switch firstSegment(raw) {
+		case "healthz":
+			_, _ = w.Write([]byte("ok\n"))
+		case "resolve":
+			u, err := e.Resolve(r.URL.Query().Get("input"), r.URL.Query().Get("on"))
+			if err != nil {
+				httpErr(w, http.StatusBadRequest, err)
+				return
+			}
+			httpJSON(w, map[string]string{"uri": u.String()})
+		case "url":
+			u, err := kit.ParseURI(r.URL.Query().Get("uri"))
+			if err != nil {
+				httpErr(w, http.StatusBadRequest, err)
+				return
+			}
+			loc, err := e.URL(u)
+			if err != nil {
+				httpErr(w, http.StatusBadRequest, err)
+				return
+			}
+			httpJSON(w, map[string]string{"url": loc})
+		case "ls":
+			u, err := kit.ParseURI(r.URL.Query().Get("uri"))
+			if err != nil {
+				httpErr(w, http.StatusBadRequest, err)
+				return
+			}
+			limit, _ := strconv.Atoi(r.URL.Query().Get("n"))
+			envs, err := e.List(r.Context(), u, limit)
+			if err != nil {
+				httpErr(w, http.StatusBadGateway, err)
+				return
+			}
+			httpJSON(w, envs)
+		case "links":
+			u, err := kit.ParseURI(r.URL.Query().Get("uri"))
+			if err != nil {
+				httpErr(w, http.StatusBadRequest, err)
+				return
+			}
+			links, err := e.Links(r.Context(), u)
+			if err != nil {
+				httpErr(w, http.StatusBadGateway, err)
+				return
+			}
+			out := make([]string, 0, len(links))
+			for _, lu := range links {
+				out = append(out, lu.String())
+			}
+			httpJSON(w, out)
+		case "":
 			httpJSON(w, map[string]any{"service": "ant", "domains": e.Domains()})
-			return
+		default:
+			// A raw URI in the path (GET /goodreads://book/2767052).
+			u, err := kit.ParseURI(raw)
+			if err != nil {
+				httpErr(w, http.StatusBadRequest, err)
+				return
+			}
+			env, err := e.Get(r.Context(), u)
+			if err != nil {
+				httpErr(w, http.StatusBadGateway, err)
+				return
+			}
+			httpJSON(w, env)
 		}
-		u, err := kit.ParseURI(raw)
-		if err != nil {
-			httpErr(w, http.StatusBadRequest, err)
-			return
-		}
-		env, err := e.Get(r.Context(), u)
-		if err != nil {
-			httpErr(w, http.StatusBadGateway, err)
-			return
-		}
-		httpJSON(w, env)
 	})
+}
 
-	return mux
+// firstSegment returns the path up to the first "/", used to pick the named
+// endpoint. A resource URI like "x://status/20" has first segment "x:", so it
+// falls through to the dereference catch-all rather than a named route.
+func firstSegment(path string) string {
+	if i := strings.IndexByte(path, '/'); i >= 0 {
+		return path[:i]
+	}
+	return path
 }
 
 func httpJSON(w http.ResponseWriter, v any) {
