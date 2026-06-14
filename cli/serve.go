@@ -40,6 +40,9 @@ Then open http://localhost:7777/ in a browser, or:
 			if err != nil {
 				return err
 			}
+			// Warm the in-memory listing index off the request path, so the first
+			// dashboard or browse click is served from memory, not a cold walk.
+			go e.WarmIndex()
 			srv := &http.Server{
 				Addr:              addr,
 				Handler:           console.Handler(),

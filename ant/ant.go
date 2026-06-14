@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/tamnd/any-cli/kit"
@@ -33,6 +34,13 @@ type Engine struct {
 	host *kit.Host
 	root string           // the data tree root ($HOME/data, ANT_DATA-overridable)
 	now  func() time.Time // the fetch clock, injectable so tests are deterministic
+
+	// llMu guards llCache, the in-memory index of materialized URIs keyed by the
+	// listing prefix. A directory walk runs once per prefix; every cache-write
+	// folds the new URI into the matching listings, so repeat reads (the web
+	// console's dashboard and browse pages) never re-walk the tree. See LL.
+	llMu    sync.RWMutex
+	llCache map[string][]string
 }
 
 // Option customizes an Engine at New.
@@ -50,7 +58,7 @@ func New(opts ...Option) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Engine{host: h, now: time.Now}
+	e := &Engine{host: h, now: time.Now, llCache: map[string][]string{}}
 	for _, o := range opts {
 		o(e)
 	}
@@ -62,6 +70,17 @@ func New(opts ...Option) (*Engine, error) {
 
 // Root returns the data tree root the Engine writes under.
 func (e *Engine) Root() string { return e.root }
+
+// WarmIndex pre-populates the in-memory LL index for every registered domain, so
+// the first browse or dashboard request is served from memory rather than paying
+// for a cold filesystem walk. It walks only ant's own domain subtrees, never the
+// whole shared data root. A long-lived process (ant serve) calls this once in the
+// background at startup; it is a no-op to call again.
+func (e *Engine) WarmIndex() {
+	for _, scheme := range e.host.Domains() {
+		_, _ = e.LL(scheme + "://")
+	}
+}
 
 // Domains returns the registered domains the Engine can address, sorted by
 // scheme. It is the analogue of sql.Drivers and backs `ant domains`.

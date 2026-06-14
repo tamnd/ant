@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -49,7 +50,12 @@ func (c *Console) home(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"service": "ant", "domains": c.e.Domains()})
 		return
 	}
+	// Count only ant's own domains, never the whole shared data root: $HOME/data
+	// is home to many other tools' trees, so a whole-tree walk is both slow and
+	// wrong (it would surface their files as ant records). Per-domain listings are
+	// bounded and the in-memory index keeps them cheap.
 	var cards []domainCard
+	disk := diskSummary{Root: c.e.Root()}
 	for _, d := range c.e.Domains() {
 		cards = append(cards, domainCard{
 			Scheme:   d.Scheme,
@@ -60,10 +66,9 @@ func (c *Console) home(w http.ResponseWriter, r *http.Request) {
 			Hosts:    d.Hosts,
 			Examples: exampleURIs(d.Scheme),
 		})
-	}
-	disk := diskSummary{Root: c.e.Root()}
-	if uris, err := c.e.LL(""); err == nil {
-		disk.Count = len(uris)
+		if uris, err := c.e.LL(d.Scheme + "://"); err == nil {
+			disk.Count += len(uris)
+		}
 	}
 	c.render(w, r, http.StatusOK, "dashboard", "ant — every record is a URI", "home",
 		dashView{Domains: cards, Disk: disk})
@@ -406,6 +411,37 @@ func (c *Console) browse(w http.ResponseWriter, r *http.Request) {
 	prefix := r.URL.Query().Get("prefix")
 	segs := splitPrefix(prefix)
 	canon := joinPrefix(segs)
+	depth := len(segs)
+
+	// Root: list the registered domains as folders, scoped to ant's own data and
+	// never the whole shared root. Walking $HOME/data wholesale is both slow (it
+	// holds many other tools' trees) and wrong (it would surface their files as ant
+	// records). Each folder's count and the JSON listing come from per-domain
+	// listings, which the in-memory index keeps cheap.
+	if depth == 0 {
+		bv := browseView{Root: c.e.Root(), Prefix: "", Crumbs: crumbsForPrefix(segs)}
+		var all []string
+		for _, d := range c.e.Domains() {
+			cu, e := c.e.LL(d.Scheme + "://")
+			if e == nil {
+				all = append(all, cu...)
+			}
+			bv.Total += len(cu)
+			bv.Folders = append(bv.Folders, browseFolder{
+				Name:   d.Scheme,
+				Href:   browseHref(d.Scheme + "://"),
+				Count:  len(cu),
+				Accent: accent(d.Scheme),
+			})
+		}
+		if wantsJSON(r) {
+			sort.Strings(all)
+			writeJSON(w, http.StatusOK, all)
+			return
+		}
+		c.render(w, r, http.StatusOK, "browse", "Browse the data tree", "browse", bv)
+		return
+	}
 
 	uris, err := c.e.LL(canon)
 	if err != nil {
@@ -418,32 +454,10 @@ func (c *Console) browse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bv := browseView{Root: c.e.Root(), Prefix: canon, Crumbs: crumbsForPrefix(segs), Total: len(uris)}
-	depth := len(segs)
-	if depth >= 1 {
-		bv.Scheme = segs[0]
-		bv.Accent = accent(segs[0])
-		bv.Searchable = c.e.Searchable(segs[0])
-		bv.Examples = exampleURIs(segs[0])
-	}
-
-	// Root: every registered domain is a folder, even with an empty cache, so a
-	// fresh install is still navigable. Each carries its cached record count.
-	if depth == 0 {
-		for _, d := range c.e.Domains() {
-			count := 0
-			if cu, e := c.e.LL(d.Scheme + "://"); e == nil {
-				count = len(cu)
-			}
-			bv.Folders = append(bv.Folders, browseFolder{
-				Name:   d.Scheme,
-				Href:   browseHref(d.Scheme + "://"),
-				Count:  count,
-				Accent: accent(d.Scheme),
-			})
-		}
-		c.render(w, r, http.StatusOK, "browse", "Browse the data tree", "browse", bv)
-		return
-	}
+	bv.Scheme = segs[0]
+	bv.Accent = accent(segs[0])
+	bv.Searchable = c.e.Searchable(segs[0])
+	bv.Examples = exampleURIs(segs[0])
 
 	// Deeper: group the cached URIs by their segment at this depth. A child with
 	// more segments below it is a folder; one that terminates here is a record.

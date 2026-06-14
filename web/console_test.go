@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/tamnd/ant/ant"
@@ -179,6 +180,59 @@ func TestJSONNegotiation(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), c.want) {
 			t.Errorf("%s: body %q lacks %q", c.path, rec.Body.String(), c.want)
 		}
+	}
+}
+
+// recordingDeref records the prefixes passed to LL, so a test can assert which
+// listings a page asks for.
+type recordingDeref struct {
+	fakeDeref
+	mu      sync.Mutex
+	llCalls []string
+}
+
+func (d *recordingDeref) LL(prefix string) ([]string, error) {
+	d.mu.Lock()
+	d.llCalls = append(d.llCalls, prefix)
+	d.mu.Unlock()
+	return d.fakeDeref.LL(prefix)
+}
+
+func (d *recordingDeref) calls() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]string(nil), d.llCalls...)
+}
+
+// TestNoWholeTreeWalk guards the performance regression that made the dashboard
+// and browse-root take seconds: they must never list the whole shared data root
+// (LL with an empty prefix), only ant's own per-domain subtrees.
+func TestNoWholeTreeWalk(t *testing.T) {
+	for _, path := range []string{"/", "/browse"} {
+		t.Run(path, func(t *testing.T) {
+			rec := &recordingDeref{}
+			c, err := New(rec, Build{Version: "test"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("Accept", "text/html")
+			c.Handler().ServeHTTP(httptest.NewRecorder(), req)
+
+			calls := rec.calls()
+			sawDomain := false
+			for _, p := range calls {
+				if p == "" {
+					t.Errorf("%s walked the whole data root (LL(%q)); calls=%v", path, p, calls)
+				}
+				if p == "demo://" {
+					sawDomain = true
+				}
+			}
+			if !sawDomain {
+				t.Errorf("%s never listed the demo domain; calls=%v", path, calls)
+			}
+		})
 	}
 }
 
