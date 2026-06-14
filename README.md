@@ -73,6 +73,7 @@ where a record's file path is its URI:
 | `ll [<uri-prefix>]` | list what is already on disk under a prefix |
 | `graph <uri> [--depth N] [--format dot\|json]` | walk links and print the subgraph |
 | `serve [--addr :7777]` | a dereference server: HTTP GET on a URI returns its record |
+| `tui [<uri>]` | a full-screen terminal browser over the namespace, keyboard-driven |
 | `mcp` | the same namespace as an MCP tool set for agents |
 
 ## Walkthrough

@@ -67,6 +67,7 @@ lives on.
 		newLLCmd(),
 		newGraphCmd(),
 		newServeCmd(),
+		newTUICmd(),
 		newMCPCmd(),
 		newDomainsCmd(),
 	)
