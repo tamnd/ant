@@ -5,10 +5,12 @@ go 1.26.4
 require (
 	github.com/charmbracelet/fang v1.0.0
 	github.com/spf13/cobra v1.10.2
-	github.com/tamnd/any-cli v0.2.0
+	github.com/tamnd/any-cli v0.3.3
 	github.com/tamnd/goodread-cli v0.2.0
 	github.com/tamnd/x-cli v0.2.0
 )
+
+require github.com/yuin/goldmark v1.8.2
 
 require (
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect

@@ -1,0 +1,16 @@
+{{define "content"}}
+{{$p := .Page}}
+<div class="state state-error">
+  <div class="state-code" style="color:var(--danger)">{{template "icon" "alert"}}<span>{{$p.Status}}</span></div>
+  <h1 class="state-title">{{$p.Title}}</h1>
+  <p class="state-kind badge">{{$p.Kind}}</p>
+  {{if $p.URI}}<p class="state-uri"><code>{{$p.URI}}</code></p>{{end}}
+  <p class="state-msg">{{$p.Message}}</p>
+
+  <div class="state-actions">
+    {{if $p.LiveURL}}<a class="btn btn-ghost" href="{{$p.LiveURL}}" target="_blank" rel="noopener noreferrer">{{template "icon" "external"}}<span>Open the source</span></a>{{end}}
+    {{range $p.Suggest}}<a class="btn btn-ghost" href="{{.Href}}">{{.Label}}</a>{{end}}
+    <a class="btn" href="/">Home</a>
+  </div>
+</div>
+{{end}}

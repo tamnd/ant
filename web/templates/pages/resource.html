@@ -1,0 +1,83 @@
+{{define "content"}}
+{{$p := .Page}}
+{{template "crumbs" $p.Crumbs}}
+
+<header class="res-head">
+  <div class="res-head-main">
+    <span class="dot dot-lg" style="background:{{$p.Accent}}"></span>
+    <div>
+      <h1 class="res-title">{{$p.ID}}</h1>
+      <div class="res-meta">
+        <span class="badge">{{$p.Type}}</span>
+        {{if $p.FromCache}}<span class="badge badge-cache" title="served from {{.AssetV}} cache">cached</span>
+        {{else}}<span class="badge badge-live" title="freshly fetched">live</span>{{end}}
+        {{if $p.Fetched}}<span class="muted res-fetched">fetched {{relTime $p.Fetched}}</span>{{end}}
+      </div>
+    </div>
+  </div>
+  <div class="res-actions">
+    <a class="btn btn-ghost" href="{{$p.RefreshURL}}">{{template "icon" "refresh"}}<span>Refresh</span></a>
+    {{if $p.LiveURL}}<a class="btn btn-ghost" href="{{$p.LiveURL}}" target="_blank" rel="noopener noreferrer">{{template "icon" "external"}}<span>Source</span></a>{{end}}
+    <a class="btn btn-ghost" href="{{lsHref $p.URI}}">{{template "icon" "folder"}}<span>Members</span></a>
+    <a class="btn btn-ghost" href="{{graphHref $p.URI}}">{{template "icon" "graph"}}<span>Graph</span></a>
+    <form class="inline" action="/export" method="post">
+      <input type="hidden" name="uri" value="{{$p.URI}}">
+      <input type="hidden" name="md" value="on">
+      <button class="btn btn-ghost" type="submit">{{template "icon" "download"}}<span>Export</span></button>
+    </form>
+  </div>
+</header>
+
+{{if $p.Exported}}<div class="banner banner-ok">Exported to the data tree under <code>{{$p.URI}}</code>.</div>{{end}}
+
+<div class="res-grid">
+  <div class="res-main">
+    {{if $p.HasBody}}
+    <article class="card prose">{{body $p.Body}}</article>
+    {{end}}
+
+    <div class="card">
+      <div class="card-title">Fields</div>
+      {{if $p.Fields}}
+      <dl class="kv">
+        {{range $p.Fields}}
+        <dt class="kv-key">{{humanize .Key}}</dt>
+        <dd class="kv-val">{{value .Key .Val}}</dd>
+        {{end}}
+      </dl>
+      {{else}}<p class="muted">No fields.</p>{{end}}
+    </div>
+
+    <details class="card raw">
+      <summary>Raw JSON</summary>
+      <pre class="code">{{$p.RawJSON}}</pre>
+    </details>
+  </div>
+
+  <aside class="res-side">
+    <div class="card">
+      <div class="card-title">Identity</div>
+      <dl class="kv kv-tight">
+        <dt class="kv-key">URI</dt><dd class="kv-val"><code>{{$p.URI}}</code></dd>
+        <dt class="kv-key">Scheme</dt><dd class="kv-val">{{$p.Scheme}}</dd>
+        <dt class="kv-key">Authority</dt><dd class="kv-val">{{$p.Authority}}</dd>
+        <dt class="kv-key">Id</dt><dd class="kv-val">{{$p.ID}}</dd>
+      </dl>
+    </div>
+
+    {{if $p.Links}}
+    <div class="card">
+      <div class="card-title">Links</div>
+      {{range $p.Links}}
+      <div class="link-group">
+        <div class="link-group-field">{{humanize .Field}}</div>
+        <div class="chips">
+          {{range .URIs}}<a class="chip" href="{{viewHref .}}">{{shortID .}}</a>{{end}}
+        </div>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </aside>
+</div>
+{{end}}

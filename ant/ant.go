@@ -18,6 +18,7 @@ package ant
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"time"
@@ -82,6 +83,24 @@ func (e *Engine) Domains() []DomainInfo {
 	return out
 }
 
+// Domain returns the descriptor of a single registered domain by scheme or
+// alias, the lookup the web console uses to render one domain's detail page.
+func (e *Engine) Domain(scheme string) (DomainInfo, bool) {
+	info, ok := e.host.Domain(scheme)
+	if !ok {
+		return DomainInfo{}, false
+	}
+	return DomainInfo{
+		Scheme:  info.Scheme,
+		Aliases: info.Aliases,
+		Hosts:   info.Hosts,
+		Binary:  info.Identity.Binary,
+		Short:   info.Identity.Short,
+		Site:    info.Identity.Site,
+		Repo:    info.Identity.Repo,
+	}, true
+}
+
 // DomainInfo is one registered domain, as `ant domains` prints it.
 type DomainInfo struct {
 	Scheme  string   `json:"scheme"`
@@ -132,6 +151,68 @@ func (e *Engine) List(ctx context.Context, u kit.URI, limit int) ([]kit.Envelope
 		out = append(out, env)
 	}
 	return out, nil
+}
+
+// Searchable reports whether a domain (by scheme or alias) supports free-text
+// search, so the web console can decide to show a search box for it.
+func (e *Engine) Searchable(scheme string) bool { return e.host.Searchable(scheme) }
+
+// Search runs a domain's free-text search and returns the hits as envelopes. A
+// hit that is URI-addressable carries its canonical @id, so it links straight to
+// get; one that is not still surfaces, wrapped with the scheme as @type and no
+// @id. limit caps the result (0 means the op's own default). Search hits are
+// previews and are not written to the data tree; dereferencing one caches it.
+func (e *Engine) Search(ctx context.Context, scheme, query string, limit int) ([]kit.Envelope, error) {
+	recs, err := e.host.Search(ctx, scheme, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]kit.Envelope, 0, len(recs))
+	for _, rec := range recs {
+		env, err := e.host.Wrap(rec, e.now())
+		if err != nil {
+			env = kit.Envelope{Type: scheme, Data: rec}
+		}
+		// A search hit often is not itself a mintable resource (it is a preview
+		// shape, not the record type), so Wrap leaves @id empty. When the hit
+		// carries a site URL, resolve it back to the canonical URI so the result is
+		// still one click from its record.
+		if env.ID == "" {
+			if u, ok := e.uriFromHit(scheme, rec); ok {
+				env.ID = u.String()
+				env.Type = u.Scheme + "/" + u.Authority
+			}
+		}
+		out = append(out, env)
+	}
+	return out, nil
+}
+
+// uriFromHit recovers a canonical URI from a search hit that did not mint one, by
+// resolving a URL-bearing field (url/link/href) through the domain. It is how a
+// preview-shaped result becomes dereferenceable.
+func (e *Engine) uriFromHit(scheme string, rec any) (kit.URI, bool) {
+	blob, err := json.Marshal(rec)
+	if err != nil {
+		return kit.URI{}, false
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(blob, &fields); err != nil {
+		return kit.URI{}, false
+	}
+	for _, key := range []string{"url", "link", "href", "permalink"} {
+		s, ok := fields[key].(string)
+		if !ok || s == "" {
+			continue
+		}
+		if u, err := e.Resolve(s, ""); err == nil {
+			return u, true
+		}
+		if u, err := e.Resolve(s, scheme); err == nil {
+			return u, true
+		}
+	}
+	return kit.URI{}, false
 }
 
 // Links fetches a URI's record and returns its outbound graph edges as URIs.

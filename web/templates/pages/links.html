@@ -1,0 +1,22 @@
+{{define "content"}}
+{{$p := .Page}}
+<header class="page-head">
+  <h1 class="page-title">Links</h1>
+  <p class="page-sub"><code>{{$p.URI}}</code></p>
+</header>
+
+{{if $p.Groups}}
+<div class="card">
+  {{range $p.Groups}}
+  <div class="link-group">
+    <div class="link-group-field">{{humanize .Field}}</div>
+    <div class="chips">
+      {{range .URIs}}<a class="chip" href="{{viewHref .}}">{{.}}</a>{{end}}
+    </div>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="empty">{{template "icon" "link"}}<p>This record links to nothing.</p></div>
+{{end}}
+{{end}}

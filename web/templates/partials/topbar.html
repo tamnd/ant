@@ -1,0 +1,28 @@
+{{define "topbar"}}
+<header class="topbar">
+  <button class="icon-btn menu-toggle" type="button" aria-label="Toggle navigation" data-menu-toggle>
+    {{template "icon" "menu"}}
+  </button>
+
+  <form class="omni" action="/resolve" method="get" role="search">
+    <span class="omni-icon">{{template "icon" "resolve"}}</span>
+    <input class="omni-input" type="text" name="input" autocomplete="off" spellcheck="false"
+           placeholder="Open a URI or paste a link  (x://user/nasa, https://en.wikipedia.org/wiki/Go)"
+           aria-label="Open a URI or paste a link">
+    <button class="omni-go" type="submit">Open</button>
+  </form>
+
+  <form class="findbox" action="/search" method="get" role="search">
+    <span class="findbox-icon">{{template "icon" "search"}}</span>
+    <input class="findbox-input" type="text" name="q" autocomplete="off" placeholder="Search" aria-label="Search a domain">
+    <select class="findbox-on" name="on" aria-label="Domain to search">
+      {{range .Domains}}{{if .Search}}<option value="{{.Scheme}}">{{.Scheme}}</option>{{end}}{{end}}
+    </select>
+  </form>
+
+  <button class="icon-btn theme-toggle" type="button" aria-label="Toggle theme" data-theme-toggle>
+    <span class="theme-sun">{{template "icon" "sun"}}</span>
+    <span class="theme-moon">{{template "icon" "moon"}}</span>
+  </button>
+</header>
+{{end}}

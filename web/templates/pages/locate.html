@@ -1,0 +1,19 @@
+{{define "content"}}
+{{$p := .Page}}
+<header class="page-head">
+  <h1 class="page-title">Live URL</h1>
+  <p class="page-sub"><code>{{$p.URI}}</code></p>
+</header>
+
+{{if $p.Err}}
+<div class="banner banner-err">{{$p.Err}}</div>
+{{else}}
+<div class="card result">
+  <div class="card-title">Source</div>
+  <a class="ext ext-lg" href="{{$p.LiveURL}}" target="_blank" rel="noopener noreferrer">{{$p.LiveURL}} ↗</a>
+  <div class="result-row">
+    <a class="btn btn-ghost" href="{{viewHref $p.URI}}">{{template "icon" "file"}}<span>Open the record</span></a>
+  </div>
+</div>
+{{end}}
+{{end}}

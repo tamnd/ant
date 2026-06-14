@@ -1,0 +1,36 @@
+{{define "content"}}
+{{$p := .Page}}
+<header class="page-head">
+  <h1 class="page-title">Resolve</h1>
+  <p class="page-sub">Turn a URI, a site link, or a bare id into a canonical resource URI.</p>
+</header>
+
+<form class="card form" action="/resolve" method="get">
+  <div class="field field-grow">
+    <label for="input">Input</label>
+    <input id="input" type="text" name="input" value="{{$p.Input}}" autocomplete="off"
+           placeholder="https://en.wikipedia.org/wiki/Go  ·  nasa  ·  x://user/nasa" autofocus>
+  </div>
+  <div class="field">
+    <label for="on">On domain (for bare ids)</label>
+    <select id="on" name="on">
+      <option value="">auto</option>
+      {{range $p.Schemes}}<option value="{{.}}"{{if eq . $p.On}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </div>
+  <div class="field field-action">
+    <button class="btn btn-primary" type="submit">{{template "icon" "resolve"}}<span>Resolve</span></button>
+  </div>
+</form>
+
+{{if $p.Err}}<div class="banner banner-err">{{$p.Err}}</div>{{end}}
+
+{{if $p.Resolved}}
+<div class="card result">
+  <div class="card-title">Resolved</div>
+  <a class="chip chip-lg" href="{{viewHref $p.Resolved}}">{{$p.Resolved}}</a>
+  {{if $p.LiveURL}}<div class="result-row"><span class="muted">Live URL</span>
+    <a class="ext" href="{{$p.LiveURL}}" target="_blank" rel="noopener noreferrer">{{$p.LiveURL}} ↗</a></div>{{end}}
+</div>
+{{end}}
+{{end}}

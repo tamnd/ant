@@ -1,0 +1,38 @@
+{{define "base.html"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{.Title}} · ant</title>
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v={{.AssetV}}">
+<link rel="stylesheet" href="/assets/styles.css?v={{.AssetV}}">
+<script nonce="{{.Nonce}}">
+// Set the theme before first paint so there is no flash. Honors a saved choice,
+// then the OS preference.
+(function () {
+  try {
+    var t = localStorage.getItem("ant-theme");
+    if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.dataset.theme = t;
+  } catch (e) { document.documentElement.dataset.theme = "light"; }
+})();
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+  {{template "sidebar" .}}
+  <div class="content">
+    {{template "topbar" .}}
+    <main id="main" class="main" tabindex="-1">
+      {{template "content" .}}
+    </main>
+    {{template "footer" .}}
+  </div>
+</div>
+<script src="/assets/app.js?v={{.AssetV}}" defer></script>
+{{if eq .Active "graph"}}<script src="/assets/graph.js?v={{.AssetV}}" defer></script>{{end}}
+</body>
+</html>
+{{end}}

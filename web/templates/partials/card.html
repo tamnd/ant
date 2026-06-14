@@ -1,0 +1,14 @@
+{{define "card"}}
+<a class="card record-card" href="{{viewHref .URI}}">
+  {{if .Thumb}}<div class="record-thumb"><img loading="lazy" src="{{.Thumb}}" alt=""></div>{{end}}
+  <div class="record-body">
+    <div class="record-head">
+      <span class="dot" style="background:{{.Accent}}"></span>
+      {{if .Type}}<span class="badge">{{.Type}}</span>{{end}}
+    </div>
+    <div class="record-title">{{.Title}}</div>
+    {{if .Snippet}}<div class="record-snippet">{{.Snippet}}</div>{{end}}
+    <div class="record-uri">{{.URI}}</div>
+  </div>
+</a>
+{{end}}

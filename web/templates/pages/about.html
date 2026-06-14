@@ -1,0 +1,48 @@
+{{define "content"}}
+{{$p := .Page}}
+<header class="page-head">
+  <h1 class="page-title">About ant</h1>
+  <p class="page-sub">A URI front door over the tamnd site tools.</p>
+</header>
+
+<div class="res-grid">
+  <div class="res-main">
+    <article class="card prose">
+      <p>ant gives every record across many sites one address: a resource URI like
+      <code>x://user/nasa</code> or <code>wikipedia://page/Go</code>. The console
+      dereferences a URI to its record, lists a resource's members, walks the link
+      graph between records, and searches the domains that support it.</p>
+      <p>Records are cached under the data tree as JSON, JSONL and Markdown, so a
+      second view is offline. A live fetch happens only on a cache miss or an
+      explicit refresh.</p>
+    </article>
+
+    <div class="card">
+      <div class="card-title">Registered domains</div>
+      <table class="table">
+        <thead><tr><th>Scheme</th><th>Aliases</th><th>Hosts</th></tr></thead>
+        <tbody>
+          {{range $p.Domains}}
+          <tr>
+            <td><a class="link" href="{{domainHref .Scheme}}"><span class="dot" style="background:{{accent .Scheme}}"></span> {{.Scheme}}</a></td>
+            <td>{{range .Aliases}}<span class="badge badge-soft">{{.}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
+            <td class="muted">{{range .Hosts}}{{.}} {{else}}—{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <aside class="res-side">
+    <div class="card">
+      <div class="card-title">Build</div>
+      <dl class="kv kv-tight">
+        <dt class="kv-key">Version</dt><dd class="kv-val"><code>{{if $p.Version}}{{$p.Version}}{{else}}dev{{end}}</code></dd>
+        <dt class="kv-key">Commit</dt><dd class="kv-val"><code>{{if $p.Commit}}{{$p.Commit}}{{else}}none{{end}}</code></dd>
+        <dt class="kv-key">Date</dt><dd class="kv-val"><code>{{if $p.Date}}{{$p.Date}}{{else}}unknown{{end}}</code></dd>
+      </dl>
+    </div>
+  </aside>
+</div>
+{{end}}

@@ -1,0 +1,9 @@
+{{define "crumbs"}}
+<nav class="crumbs" aria-label="Breadcrumb">
+  {{range $i, $c := .}}
+    {{if $i}}<span class="crumb-sep">/</span>{{end}}
+    {{if $c.Last}}<span class="crumb is-last" aria-current="page">{{$c.Label}}</span>
+    {{else}}<a class="crumb" href="{{$c.Href}}">{{$c.Label}}</a>{{end}}
+  {{end}}
+</nav>
+{{end}}

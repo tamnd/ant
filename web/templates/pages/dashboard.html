@@ -1,0 +1,38 @@
+{{define "content"}}
+{{$p := .Page}}
+<section class="hero">
+  <h1 class="hero-title">Every record is a URI.</h1>
+  <p class="hero-sub">ant is one front door over the tamnd site tools. Open a resource by its
+    URI, browse the local data tree, walk the link graph, or search a domain.</p>
+  <div class="hero-stats">
+    <a class="stat" href="/browse">
+      {{template "icon" "database"}}
+      <span class="stat-num">{{$p.Disk.Count}}</span>
+      <span class="stat-label">records cached</span>
+    </a>
+    <div class="stat stat-path">
+      {{template "icon" "folder"}}
+      <span class="stat-label">{{$p.Disk.Root}}</span>
+    </div>
+  </div>
+</section>
+
+<h2 class="section-title">Domains</h2>
+<div class="grid grid-domains">
+  {{range $p.Domains}}
+  <div class="card domain-card">
+    <div class="domain-card-head">
+      <span class="dot dot-lg" style="background:{{.Accent}}"></span>
+      <a class="domain-card-name" href="{{domainHref .Scheme}}">{{.Scheme}}</a>
+      {{range .Aliases}}<span class="badge badge-soft">{{.}}</span>{{end}}
+    </div>
+    {{if .Short}}<p class="domain-card-short">{{.Short}}</p>{{end}}
+    {{if .Examples}}
+    <div class="domain-card-examples">
+      {{range .Examples}}<a class="chip" href="{{viewHref .}}">{{.}}</a>{{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}

@@ -1,0 +1,35 @@
+{{define "content"}}
+{{$p := .Page}}
+<header class="page-head page-head-row">
+  <div>
+    <h1 class="page-title">Graph</h1>
+    <p class="page-sub"><code>{{$p.URI}}</code></p>
+  </div>
+  <form class="depth-form" action="/graph" method="get">
+    <input type="hidden" name="uri" value="{{$p.URI}}">
+    <label for="depth">Depth</label>
+    <select id="depth" name="depth" data-autosubmit>
+      <option value="1"{{if eq $p.Depth 1}} selected{{end}}>1</option>
+      <option value="2"{{if eq $p.Depth 2}} selected{{end}}>2</option>
+      <option value="3"{{if eq $p.Depth 3}} selected{{end}}>3</option>
+    </select>
+    <a class="btn btn-ghost" href="/graph?uri={{$p.URI}}&depth={{$p.Depth}}&format=dot">{{template "icon" "download"}}<span>DOT</span></a>
+  </form>
+</header>
+
+<div class="card graph-card">
+  <div id="graph" class="graph-canvas" data-payload="{{$p.JSON}}" role="img" aria-label="Link graph"></div>
+  <noscript><p class="muted graph-noscript">The interactive graph needs JavaScript. The nodes are listed below.</p></noscript>
+</div>
+
+<h2 class="section-title">Nodes</h2>
+<div class="grid grid-cards">
+  {{range $p.Payload.Nodes}}
+  <a class="card mini-card" href="{{viewHref .URI}}">
+    <span class="dot" style="background:{{.Accent}}"></span>
+    <span class="mini-card-label">{{.Label}}</span>
+    <span class="badge badge-soft">{{.Type}}</span>
+  </a>
+  {{end}}
+</div>
+{{end}}
