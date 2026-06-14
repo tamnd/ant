@@ -158,10 +158,7 @@ func TestColdFetchShowsLoadingThenStatus(t *testing.T) {
 	// Release the fetch and let it complete, then status flips to ready.
 	close(d.release)
 	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if statusPhase(t, h, "demo://widget/42") == "ready" {
-			break
-		}
+	for statusPhase(t, h, "demo://widget/42") != "ready" {
 		if time.Now().After(deadline) {
 			t.Fatal("status never became ready")
 		}
