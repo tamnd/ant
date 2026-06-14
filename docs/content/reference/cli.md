@@ -47,6 +47,7 @@ A record's file path under `--data` is its URI:
 | Command | What it does |
 |---|---|
 | `serve [--addr :7777]` | dereference server: HTTP GET on a URI path returns its record; `/resolve`, `/url`, `/ls`, `/links` endpoints |
+| `tui [<uri>]` | full-screen terminal browser over the namespace: follow links, list members, walk the graph, browse the cache, all keyboard-driven |
 | `mcp` | the same namespace as an MCP tool set over stdio: get/ls/links/url/resolve/domains |
 | `version` | print the version and exit |
 
