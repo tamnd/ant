@@ -1,0 +1,10 @@
+title       = "ant"
+baseURL     = "https://ant.tamnd.com/"
+description = "Every public record is a URI, and ant dereferences it."
+contentDir  = "content"
+outputDir   = "public"
+theme       = "tago-doks"
+syntaxHighlight = "true"
+
+[params]
+github = "https://github.com/tamnd/ant"
