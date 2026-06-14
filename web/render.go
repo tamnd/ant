@@ -2,7 +2,6 @@ package web
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -691,10 +690,4 @@ func graphToPayload(root string, g *ant.Graph) graphPayload {
 		})
 	}
 	return p
-}
-
-// ctxValue is a tiny helper to read the request nonce in tests.
-func ctxNonce(ctx context.Context) string {
-	n, _ := ctx.Value(nonceKey{}).(string)
-	return n
 }
