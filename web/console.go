@@ -1,7 +1,9 @@
 // Package web is the ant web console: a browser GUI over the whole resource-URI
-// namespace, server-rendered in pure Go and styled to match shadcn/ui, with the
-// machine-facing JSON API preserved under content negotiation. It is the human
-// surface that sits beside the CLI and the MCP server (8000_ant_serve).
+// namespace, server-rendered in pure Go with a flat, square, monospace console
+// look (panels that float on a tinted canvas, no shadows or rules, no rounding,
+// an embedded Geist Mono face), with the machine-facing JSON API preserved under
+// content negotiation. It is the
+// human surface that sits beside the CLI and the MCP server (8000_ant_serve).
 //
 // The console adds no data capability of its own; every page is a thin rendering
 // of an ant.Engine method. It depends only on the Deref interface, so it is
