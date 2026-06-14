@@ -79,12 +79,8 @@ func (s *screenBase) Subject() (kit.URI, bool) { return kit.URI{}, false }
 // the only code that mutates the stack (8000_ant_tui §5.1).
 
 func navigate(u kit.URI) tea.Cmd { return func() tea.Msg { return navigateMsg{URI: u} } }
-func navigateFresh(u kit.URI) tea.Cmd {
-	return func() tea.Msg { return navigateMsg{URI: u, Refresh: true} }
-}
-func push(s Screen) tea.Cmd    { return func() tea.Msg { return pushMsg{Screen: s} } }
-func replace(s Screen) tea.Cmd { return func() tea.Msg { return replaceMsg{Screen: s} } }
-func goBack() tea.Cmd          { return func() tea.Msg { return backMsg{} } }
+func push(s Screen) tea.Cmd      { return func() tea.Msg { return pushMsg{Screen: s} } }
+func goBack() tea.Cmd            { return func() tea.Msg { return backMsg{} } }
 
 // itoa is a tiny strconv.Itoa alias used by the fetch-key builders.
 func itoa(n int) string { return strconv.Itoa(n) }

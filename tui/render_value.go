@@ -253,18 +253,6 @@ func relTime(ts string) string {
 	}
 }
 
-// shortID is the last path segment of a URI, for compact graph/card labels.
-func shortID(uri string) string {
-	u, err := kit.ParseURI(uri)
-	if err != nil {
-		return uri
-	}
-	if len(u.Path) == 0 {
-		return u.Authority
-	}
-	return u.Path[len(u.Path)-1]
-}
-
 func isHTTPURL(s string) bool {
 	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
 }
