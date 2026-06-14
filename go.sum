@@ -93,8 +93,8 @@ github.com/tamnd/wikipedia-cli v0.1.0 h1:LOLYAnH2LOIl6fr2ES1gJSo0sLDTMfvhcMiZZ+e
 github.com/tamnd/wikipedia-cli v0.1.0/go.mod h1:iR/4ucuwD9N5sTYCu7sMlpLNgS1XiikYebNhWGO+LrE=
 github.com/tamnd/x-cli v0.2.0 h1:k8cX6+YpqjnY1zq5T3x5zuXUWak554AalTUR7GrQ7iE=
 github.com/tamnd/x-cli v0.2.0/go.mod h1:6Mjop/nBV6BwK3GhMlQmyxesVVtHdl6jQtsNMFnhcY4=
-github.com/tamnd/ytb-cli v0.1.2-0.20260614093259-c846254c19bb h1:PnYx4OtjhxiKBpwJdURlwo7YPIodKDTzbOa1IH1bU4s=
-github.com/tamnd/ytb-cli v0.1.2-0.20260614093259-c846254c19bb/go.mod h1:/DoozwStkw9OMRksN12EOfPRP+66ODZMKg7/CDPgiGQ=
+github.com/tamnd/ytb-cli v0.2.0 h1:mzIVriPNmVZ52ePj1Zwb5P1tkq+CNYhuqBtGM85zNBE=
+github.com/tamnd/ytb-cli v0.2.0/go.mod h1:/DoozwStkw9OMRksN12EOfPRP+66ODZMKg7/CDPgiGQ=
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e h1:JVG44RsyaB9T2KIHavMF/ppJZNG9ZpyihvCd0w101no=
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e/go.mod h1:RbqR21r5mrJuqunuUZ/Dhy/avygyECGrLceyNeo4LiM=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
