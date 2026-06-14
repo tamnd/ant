@@ -5,8 +5,9 @@ weight: 10
 ---
 
 `ant` is a single binary that puts one URI namespace over the whole
-`tamnd/*-cli` family. A book on Goodreads, an account on X — each is a short
-URI, and `ant` dereferences it: it fetches the record, follows the typed links
+`tamnd/*-cli` family. A book on Goodreads, an account on X, an article on
+Wikipedia — each is a short URI, and `ant` dereferences it: it fetches the
+record, follows the typed links
 out of it, and writes the slice of the graph you asked for to disk. There is
 nothing to sign up for and nothing to run alongside it.
 
@@ -20,6 +21,8 @@ goodreads://book/2767052
 goodreads://author/153394
 x://user/nasa
 x://status/20
+wikipedia://page/Alan_Turing
+wikipedia://category/Computability_theory
 ```
 
 Every verb takes a URI and does one thing — `resolve` normalizes any id or URL

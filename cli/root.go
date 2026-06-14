@@ -1,8 +1,8 @@
 // Package cli builds the ant command tree: a URI front door over every kit
 // domain. ant composes the single-site libraries rather than replacing them, so
 // a domain becomes addressable by registering with kit from its own package's
-// init. The two blank imports below are the whole coupling — enabling a domain
-// is one line, exactly as a database/sql program enables a driver.
+// init. The blank imports below are the whole coupling: enabling a domain is one
+// line, exactly as a database/sql program enables a driver.
 package cli
 
 import (
@@ -13,6 +13,7 @@ import (
 	// Domain drivers. Each registers itself with kit on init; ant drives them as
 	// libraries in one static binary, never as subprocesses.
 	_ "github.com/tamnd/goodread-cli/goodread"
+	_ "github.com/tamnd/wikipedia-cli/wiki"
 	_ "github.com/tamnd/x-cli/x"
 )
 

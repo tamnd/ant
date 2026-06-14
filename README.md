@@ -3,8 +3,9 @@
 Every public record is a URI, and `ant` dereferences it.
 
 `ant` is a single pure-Go binary that puts one address space over the whole
-`tamnd/*-cli` family. A book on Goodreads, an account on X — each is a short
-URI like `goodreads://book/2767052` or `x://user/nasa`. Hand one to `ant` and
+`tamnd/*-cli` family. A book on Goodreads, an account on X, an article on
+Wikipedia — each is a short URI like `goodreads://book/2767052`,
+`x://user/nasa`, or `wikipedia://page/Alan_Turing`. Hand one to `ant` and
 it fetches the record, follows the typed links out of it, and writes the slice
 of the graph you asked for to disk, no matter which site each name lives on.
 
@@ -42,6 +43,8 @@ goodreads://book/2767052
 goodreads://author/153394
 x://user/nasa
 x://status/20
+wikipedia://page/Alan_Turing
+wikipedia://category/Computability_theory
 ```
 
 Every verb takes a URI and does one thing:
@@ -129,6 +132,7 @@ links it in with one line in [`cli/root.go`](cli/root.go):
 ```go
 import (
     _ "github.com/tamnd/goodread-cli/goodread"
+    _ "github.com/tamnd/wikipedia-cli/wiki"
     _ "github.com/tamnd/x-cli/x"
 )
 ```

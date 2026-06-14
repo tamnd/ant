@@ -52,6 +52,15 @@ goodreads://author/153394
 goodreads://book/2767052
 ```
 
+`ls` lists the members of a collection, and each member is itself an address
+you can follow:
+
+```bash
+$ ant cat wikipedia://page/Alan_Turing      # the article text
+$ ant ls  wikipedia://page/Alan_Turing -n 5  # the articles it links to
+$ ant ls  wikipedia://category/Computability_theory
+```
+
 ## Serve the namespace
 
 Expose the whole namespace as dereferenceable linked data over HTTP, or as an

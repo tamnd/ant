@@ -15,6 +15,7 @@ drivers are blank imports:
 ```go
 import (
     _ "github.com/tamnd/goodread-cli/goodread"
+    _ "github.com/tamnd/wikipedia-cli/wiki"
     _ "github.com/tamnd/x-cli/x"
 )
 ```
