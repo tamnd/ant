@@ -10,8 +10,8 @@ import (
 )
 
 // The drivers are blank-imported by root.go, so the cli test binary has the
-// goodreads and x domains registered. That is enough to exercise the router's
-// offline paths without touching the network.
+// goodreads, x, and wikipedia domains registered. That is enough to exercise the
+// router's offline paths without touching the network.
 func newTestEngine(t *testing.T) *ant.Engine {
 	t.Helper()
 	e, err := ant.New(ant.WithRoot(t.TempDir()))
