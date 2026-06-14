@@ -65,6 +65,11 @@ func (f fakeDeref) Dereference(_ context.Context, u kit.URI, refresh bool) (ant.
 	raw, _ := json.MarshalIndent(env, "", "  ")
 	return ant.Fetched{Env: env, Raw: raw, Body: "# Body\n\nHello from the body.", HasBody: true, FromCache: !refresh}, nil
 }
+func (f fakeDeref) Lookup(u kit.URI) (ant.Fetched, bool) {
+	env := f.env(u)
+	raw, _ := json.MarshalIndent(env, "", "  ")
+	return ant.Fetched{Env: env, Raw: raw, Body: "# Body\n\nHello from the body.", HasBody: true, FromCache: true}, true
+}
 func (fakeDeref) Cached(kit.URI) bool                { return true }
 func (fakeDeref) BodyOf(kit.Envelope) (string, bool) { return "body", true }
 func (f fakeDeref) List(_ context.Context, u kit.URI, n int) ([]kit.Envelope, error) {

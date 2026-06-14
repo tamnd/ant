@@ -33,6 +33,7 @@
 </div>
 <script src="/assets/app.js?v={{.AssetV}}" defer></script>
 {{if eq .Active "graph"}}<script src="/assets/graph.js?v={{.AssetV}}" defer></script>{{end}}
+{{if eq .Active "loading"}}<script src="/assets/poll.js?v={{.AssetV}}" defer></script>{{end}}
 </body>
 </html>
 {{end}}

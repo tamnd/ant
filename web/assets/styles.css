@@ -402,6 +402,19 @@ svg.icon { width: 18px; height: 18px; flex: none; }
 .state-msg { color: hsl(var(--muted)); max-width: 60ch; }
 .state-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
 
+/* ---- loading screen ------------------------------------------------------- */
+.loading-card { display: flex; align-items: center; gap: 16px; }
+.loading-body { min-width: 0; }
+.loading-title { font-weight: 600; margin-bottom: 3px; }
+.spinner {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  border: 3px solid hsl(var(--border));
+  border-top-color: hsl(var(--ring));
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
 /* ---- responsive ----------------------------------------------------------- */
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }

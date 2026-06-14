@@ -57,6 +57,14 @@ func (e *Engine) Cached(u kit.URI) bool {
 	return err == nil
 }
 
+// Lookup returns a record from the on-disk cache without ever touching the
+// network, so the web console can render a cached page instantly and route only a
+// miss to a background fetch. ok is false on a miss (absent or unreadable). It is
+// the read-only half of Dereference: same cache read, no write-back, no fetch.
+func (e *Engine) Lookup(u kit.URI) (Fetched, bool) {
+	return e.readCache(u)
+}
+
 // readCache reads a materialized record from the data tree, returning false on
 // any miss (absent or unreadable) so the caller falls through to a live fetch.
 func (e *Engine) readCache(u kit.URI) (Fetched, bool) {

@@ -13,14 +13,17 @@ import (
 	"github.com/tamnd/any-cli/kit/errs"
 )
 
-// upstreamTimeout caps how long a single page will wait on a site fetch before
-// it surfaces a 502 "upstream timed out" state (8000_ant_serve §6.5).
-const upstreamTimeout = 30 * time.Second
+// exportTimeout bounds the one synchronous, state-changing action left on the
+// request path: the export POST, which writes the data tree and follows links.
+// Every read page is async (see jobs.go) and never blocks on a timeout; export is
+// a deliberate button press, so a bounded wait with a clean error is the right DX
+// (8000_ant_serve §24).
+const exportTimeout = 60 * time.Second
 
 // reqCtx derives a timeout-bounded context from the request so a hung upstream
-// cannot pin a browser tab, while a client disconnect still cancels the fetch.
+// cannot pin the export forever, while a client disconnect still cancels it.
 func reqCtx(r *http.Request) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(r.Context(), upstreamTimeout)
+	return context.WithTimeout(r.Context(), exportTimeout)
 }
 
 // --- dashboard / home -------------------------------------------------------
@@ -102,17 +105,52 @@ func (c *Console) resource(w http.ResponseWriter, r *http.Request, raw string) {
 		c.fail(w, r, errs.Usage("%s", err.Error()), raw)
 		return
 	}
-	// Cache-first: read the record from the data tree when it is there, and only
-	// fetch from the site on a miss or when ?refresh=1 forces a fresh copy. A live
-	// fetch is written back, so the next view is offline (8000_ant_serve §23).
 	refresh := r.URL.Query().Get("refresh") == "1"
-	ctx, cancel := reqCtx(r)
-	defer cancel()
-	f, err := c.e.Dereference(ctx, u, refresh)
-	if err != nil {
-		c.fail(w, r, err, u.String())
+
+	// Cache-first fast path: a materialized record renders instantly, with no
+	// goroutine, no queue, and no network — the common case once a URI has been
+	// seen. This is what keeps an already-fetched page well under the budget even
+	// while a sibling tab waits on a slow site (8000_ant_serve §23, §24).
+	if !refresh {
+		if f, ok := c.e.Lookup(u); ok {
+			c.emitResource(w, r, u, f)
+			return
+		}
+	}
+
+	// Miss (or forced refresh): run the fetch as a deduplicated background job so
+	// the request never blocks on a slow upstream. A browser gets the grace race
+	// (render inline if quick, loading screen if slow); a script waits for the data.
+	jb := c.jobs.start(fetchKey("get", u.String(), 0, 0, refresh), func(ctx context.Context) (any, error) {
+		return c.e.Dereference(ctx, u, refresh)
+	})
+	if wantsJSON(r) {
+		ph, v, jerr := jb.wait(r.Context())
+		switch ph {
+		case jobReady:
+			writeJSON(w, http.StatusOK, v.(ant.Fetched).Env)
+		case jobError:
+			writeJSONErr(w, jerr)
+		default:
+			writeJSON(w, http.StatusAccepted, pendingJSON(u))
+		}
 		return
 	}
+	ph, v, jerr := c.graced(r, jb)
+	switch ph {
+	case jobReady:
+		c.emitResource(w, r, u, v.(ant.Fetched))
+	case jobError:
+		c.renderError(w, r, jerr, u.String())
+	default:
+		c.renderLoading(w, r, u, "record", "get", 0, 0, refresh)
+	}
+}
+
+// emitResource renders a fetched record and warms its neighbors. Splitting it out
+// lets the cache fast path and the background-job path render identically. The
+// JSON branch returns before the prefetch, so only a browser view warms links.
+func (c *Console) emitResource(w http.ResponseWriter, r *http.Request, u kit.URI, f ant.Fetched) {
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusOK, f.Env)
 		return
@@ -138,6 +176,15 @@ func (c *Console) resource(w http.ResponseWriter, r *http.Request, raw string) {
 		RefreshURL: viewHref(u.String()) + "&refresh=1",
 	}
 	c.render(w, r, http.StatusOK, "resource", f.Env.ID, "", rv)
+	c.prefetchLinks(f.Env.Links)
+}
+
+// graced waits for a job up to the grace window, so a fast fetch renders inline
+// and a slow one falls through to a loading screen rather than blocking the tab.
+func (c *Console) graced(r *http.Request, jb *job) (jobPhase, any, error) {
+	ctx, cancel := context.WithTimeout(r.Context(), graceWindow)
+	defer cancel()
+	return jb.wait(ctx)
 }
 
 // --- collection (ls) --------------------------------------------------------
@@ -166,22 +213,37 @@ func (c *Console) collection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n, _ := strconv.Atoi(r.URL.Query().Get("n"))
-	ctx, cancel := reqCtx(r)
-	defer cancel()
-	envs, err := c.e.List(ctx, u, n)
-	if err != nil {
-		c.fail(w, r, err, u.String())
-		return
-	}
+	// A collection is always live (it is not cached as a unit), so it runs as a
+	// background job: the page renders inline when the listing is quick and shows a
+	// loading screen when the site is slow, never a timeout (8000_ant_serve §24).
+	jb := c.jobs.start(fetchKey("ls", u.String(), n, 0, false), func(ctx context.Context) (any, error) {
+		return c.e.List(ctx, u, n)
+	})
 	if wantsJSON(r) {
-		writeJSON(w, http.StatusOK, envs)
+		ph, v, jerr := jb.wait(r.Context())
+		switch ph {
+		case jobReady:
+			writeJSON(w, http.StatusOK, v.([]kit.Envelope))
+		case jobError:
+			writeJSONErr(w, jerr)
+		default:
+			writeJSON(w, http.StatusAccepted, pendingJSON(u))
+		}
 		return
 	}
-	cv := collectionView{URI: u.String(), N: n, Accent: accent(u.Scheme)}
-	for _, env := range envs {
-		cv.Cards = append(cv.Cards, cardFromEnv(env))
+	ph, v, jerr := c.graced(r, jb)
+	switch ph {
+	case jobReady:
+		cv := collectionView{URI: u.String(), N: n, Accent: accent(u.Scheme)}
+		for _, env := range v.([]kit.Envelope) {
+			cv.Cards = append(cv.Cards, cardFromEnv(env))
+		}
+		c.render(w, r, http.StatusOK, "collection", "Members of "+u.String(), "", cv)
+	case jobError:
+		c.renderError(w, r, jerr, u.String())
+	default:
+		c.renderLoading(w, r, u, "collection", "ls", n, 0, false)
 	}
-	c.render(w, r, http.StatusOK, "collection", "Members of "+u.String(), "", cv)
 }
 
 // cardFromEnv projects an envelope into a list card: a title, a one-line
@@ -230,28 +292,44 @@ func (c *Console) linksPage(w http.ResponseWriter, r *http.Request) {
 		c.fail(w, r, errs.Usage("%s", err.Error()), raw)
 		return
 	}
-	ctx, cancel := reqCtx(r)
-	defer cancel()
-	if wantsJSON(r) {
-		links, err := c.e.Links(ctx, u)
-		if err != nil {
-			writeJSONErr(w, err)
+	// Links are derived from the record's envelope, so they share the same fetch
+	// job and cache entry as the resource page: viewing one warms the other.
+	emit := func(f ant.Fetched) {
+		if wantsJSON(r) {
+			writeJSON(w, http.StatusOK, flattenLinks(f.Env.Links))
 			return
 		}
-		out := make([]string, 0, len(links))
-		for _, lu := range links {
-			out = append(out, lu.String())
+		c.render(w, r, http.StatusOK, "links", "Links of "+u.String(), "",
+			linksView{URI: u.String(), Accent: accent(u.Scheme), Groups: linkGroupsOf(f.Env.Links)})
+	}
+	if f, ok := c.e.Lookup(u); ok {
+		emit(f)
+		return
+	}
+	jb := c.jobs.start(fetchKey("get", u.String(), 0, 0, false), func(ctx context.Context) (any, error) {
+		return c.e.Dereference(ctx, u, false)
+	})
+	if wantsJSON(r) {
+		ph, v, jerr := jb.wait(r.Context())
+		switch ph {
+		case jobReady:
+			writeJSON(w, http.StatusOK, flattenLinks(v.(ant.Fetched).Env.Links))
+		case jobError:
+			writeJSONErr(w, jerr)
+		default:
+			writeJSON(w, http.StatusAccepted, pendingJSON(u))
 		}
-		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	env, err := c.e.Get(ctx, u)
-	if err != nil {
-		c.fail(w, r, err, u.String())
-		return
+	ph, v, jerr := c.graced(r, jb)
+	switch ph {
+	case jobReady:
+		emit(v.(ant.Fetched))
+	case jobError:
+		c.renderError(w, r, jerr, u.String())
+	default:
+		c.renderLoading(w, r, u, "record", "get", 0, 0, false)
 	}
-	c.render(w, r, http.StatusOK, "links", "Links of "+u.String(), "",
-		linksView{URI: u.String(), Accent: accent(u.Scheme), Groups: linkGroupsOf(env.Links)})
 }
 
 // --- resolve ----------------------------------------------------------------
@@ -354,25 +432,175 @@ func (c *Console) graph(w http.ResponseWriter, r *http.Request) {
 	if depth > 3 {
 		depth = 3
 	}
-	ctx, cancel := reqCtx(r)
-	defer cancel()
-	g, err := c.e.Walk(ctx, u, depth)
-	if err != nil {
-		c.fail(w, r, err, u.String())
+	dot := r.URL.Query().Get("format") == "dot"
+	// A graph walk fans out over the network, so it runs as a background job too.
+	// DOT and JSON callers want the bytes and so wait for the job; a browser gets
+	// the grace race and a loading screen on a slow walk (8000_ant_serve §24).
+	jb := c.jobs.start(fetchKey("graph", u.String(), 0, depth, false), func(ctx context.Context) (any, error) {
+		return c.e.Walk(ctx, u, depth)
+	})
+	if dot || wantsJSON(r) {
+		ph, v, jerr := jb.wait(r.Context())
+		if ph == jobError {
+			c.fail(w, r, jerr, u.String())
+			return
+		}
+		if ph != jobReady {
+			writeJSON(w, http.StatusAccepted, pendingJSON(u))
+			return
+		}
+		g := v.(*ant.Graph)
+		if dot {
+			w.Header().Set("Content-Type", "text/vnd.graphviz; charset=utf-8")
+			_, _ = w.Write([]byte(g.Dot()))
+			return
+		}
+		writeJSON(w, http.StatusOK, graphToPayload(u.String(), g))
 		return
 	}
-	payload := graphToPayload(u.String(), g)
-	if r.URL.Query().Get("format") == "dot" {
-		w.Header().Set("Content-Type", "text/vnd.graphviz; charset=utf-8")
-		_, _ = w.Write([]byte(g.Dot()))
+	ph, v, jerr := c.graced(r, jb)
+	switch ph {
+	case jobReady:
+		payload := graphToPayload(u.String(), v.(*ant.Graph))
+		c.render(w, r, http.StatusOK, "graph", "Graph of "+u.String(), "graph",
+			graphView{URI: u.String(), Depth: depth, Payload: payload, JSON: prettyJSON(payload)})
+	case jobError:
+		c.renderError(w, r, jerr, u.String())
+	default:
+		c.renderLoading(w, r, u, "graph", "graph", 0, depth, false)
+	}
+}
+
+// --- background fetch plumbing (jobs, loading screen, status poll) ----------
+
+// loadingView is the model for the loading screen shown while a slow fetch runs in
+// the background. The poller hits StatusURL and reloads the page the moment the
+// work is ready; LiveURL is the manual escape hatch; Crumbs place the pending
+// record in the tree (8000_ant_serve §24).
+type loadingView struct {
+	URI       string
+	Scheme    string
+	Accent    string
+	Kind      string // "record", "collection", "graph" — what is being fetched
+	LiveURL   string
+	StatusURL string
+	Crumbs    []crumb
+}
+
+// prefetchCap bounds how many of a record's links are warmed on view, so a page
+// with hundreds of links does not fan out without limit.
+const prefetchCap = 6
+
+// fetchKey is the dedup/identity key for a background fetch, shared by the page
+// handlers and the status endpoint so a poll finds the very job its page started.
+// view and links collapse onto one "get" record fetch; ls and graph key on their
+// own parameters.
+func fetchKey(op, uri string, n, depth int, refresh bool) string {
+	switch op {
+	case "ls":
+		return "ls:" + uri + ":" + strconv.Itoa(n)
+	case "graph":
+		return "graph:" + uri + ":" + strconv.Itoa(depth)
+	default: // "get"
+		if refresh {
+			return "get:" + uri + ":fresh"
+		}
+		return "get:" + uri
+	}
+}
+
+// pendingJSON is the body a JSON caller gets when a fetch is still running past
+// the client's own deadline (rare; the script usually waits for the data).
+func pendingJSON(u kit.URI) map[string]string {
+	return map[string]string{"status": "pending", "uri": u.String()}
+}
+
+// renderLoading shows the loading screen for a page whose fetch is still running.
+// The screen polls the status endpoint and reloads itself the instant the work is
+// ready (or failed), so the eventual render is the normal page, not a spinner.
+func (c *Console) renderLoading(w http.ResponseWriter, r *http.Request, u kit.URI, kind, op string, n, depth int, refresh bool) {
+	liveURL, _ := c.e.URL(u)
+	lv := loadingView{
+		URI:       u.String(),
+		Scheme:    u.Scheme,
+		Accent:    accent(u.Scheme),
+		Kind:      kind,
+		LiveURL:   liveURL,
+		StatusURL: statusURL(op, u.String(), n, depth, refresh),
+		Crumbs:    crumbsFor(u),
+	}
+	c.render(w, r, http.StatusAccepted, "loading", "Fetching "+u.String(), "loading", lv)
+}
+
+// status reports the phase of a background fetch as JSON, so the loading page's
+// poller can reload the instant the work is ready or failed. It always answers
+// JSON and never starts a fetch — it only peeks at one a page already launched.
+func (c *Console) status(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	n, _ := strconv.Atoi(q.Get("n"))
+	depth, _ := strconv.Atoi(q.Get("depth"))
+	var key string
+	if q.Get("op") == "search" {
+		key = searchKey(q.Get("on"), q.Get("q"), n)
+	} else {
+		key = fetchKey(q.Get("op"), q.Get("uri"), n, depth, q.Get("refresh") == "1")
+	}
+	jb, ok := c.jobs.peek(key)
+	if !ok {
+		// No job: it finished and was swept, or this is a stale poll. Either way, tell
+		// the poller to reload — the page then hits the cache or re-runs the fetch.
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 		return
 	}
-	if wantsJSON(r) {
-		writeJSON(w, http.StatusOK, payload)
-		return
+	switch ph, _, jerr := jb.snapshot(); ph {
+	case jobReady:
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+	case jobError:
+		writeJSON(w, http.StatusOK, map[string]string{"status": "error", "error": jerr.Error()})
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"status": "pending"})
 	}
-	c.render(w, r, http.StatusOK, "graph", "Graph of "+u.String(), "graph",
-		graphView{URI: u.String(), Depth: depth, Payload: payload, JSON: prettyJSON(payload)})
+}
+
+// prefetchLinks warms the cache for the records this one links to, so the next
+// click opens instantly. It is fire-and-forget and bounded: only not-yet-cached
+// targets, only up to prefetchCap, each run through the prefetch limiter so a site
+// is never stampeded (8000_ant_serve §24).
+func (c *Console) prefetchLinks(links map[string][]string) {
+	n := 0
+	for _, targets := range links {
+		for _, t := range targets {
+			if n >= prefetchCap {
+				return
+			}
+			tu, err := kit.ParseURI(t)
+			if err != nil || c.e.Cached(tu) {
+				continue
+			}
+			n++
+			target := tu
+			c.jobs.prefetch(fetchKey("get", target.String(), 0, 0, false), func(ctx context.Context) (any, error) {
+				return c.e.Dereference(ctx, target, false)
+			})
+		}
+	}
+}
+
+// flattenLinks returns a record's link targets as a sorted, de-duplicated flat
+// list, the shape the links JSON endpoint has always returned (a [] for none).
+func flattenLinks(m map[string][]string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, targets := range m {
+		for _, t := range targets {
+			if !seen[t] {
+				seen[t] = true
+				out = append(out, t)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // --- browse (the data tree as directories) ----------------------------------
@@ -540,14 +768,16 @@ func (c *Console) search(w http.ResponseWriter, r *http.Request) {
 			writeJSONErr(w, errs.Usage("search needs ?on=<scheme>&q=<query>"))
 			return
 		}
-		ctx, cancel := reqCtx(r)
-		defer cancel()
-		envs, err := c.e.Search(ctx, scheme, query, n)
-		if err != nil {
-			writeJSONErr(w, err)
-			return
+		jb := c.jobs.start(searchKey(scheme, query, n), c.searchRun(scheme, query, n))
+		ph, v, jerr := jb.wait(r.Context())
+		switch ph {
+		case jobReady:
+			writeJSON(w, http.StatusOK, v.([]kit.Envelope))
+		case jobError:
+			writeJSONErr(w, jerr)
+		default:
+			writeJSON(w, http.StatusAccepted, map[string]string{"status": "pending"})
 		}
-		writeJSON(w, http.StatusOK, envs)
 		return
 	}
 
@@ -561,19 +791,49 @@ func (c *Console) search(w http.ResponseWriter, r *http.Request) {
 		c.render(w, r, http.StatusBadRequest, "search", "Search", "search", sv)
 		return
 	}
-	ctx, cancel := reqCtx(r)
-	defer cancel()
-	envs, err := c.e.Search(ctx, scheme, query, n)
-	if err != nil {
-		sv.Err = err.Error()
-		c.render(w, r, statusFor(err), "search", "Search", "search", sv)
-		return
+	// A search is always live (results are previews, never cached), so it too runs
+	// as a background job: a quick query renders inline, a slow one shows the
+	// loading screen, and neither path can time out (8000_ant_serve §24).
+	jb := c.jobs.start(searchKey(scheme, query, n), c.searchRun(scheme, query, n))
+	ph, v, jerr := c.graced(r, jb)
+	switch ph {
+	case jobReady:
+		sv.Searched = true
+		for _, env := range v.([]kit.Envelope) {
+			sv.Cards = append(sv.Cards, cardFromEnv(env))
+		}
+		c.render(w, r, http.StatusOK, "search", "Search: "+query, "search", sv)
+	case jobError:
+		sv.Err = jerr.Error()
+		c.render(w, r, statusFor(jerr), "search", "Search", "search", sv)
+	default:
+		c.renderSearchLoading(w, r, scheme, query, n)
 	}
-	sv.Searched = true
-	for _, env := range envs {
-		sv.Cards = append(sv.Cards, cardFromEnv(env))
+}
+
+// searchRun is the search job's work: a context-aware free-text query.
+func (c *Console) searchRun(scheme, query string, n int) runFn {
+	return func(ctx context.Context) (any, error) {
+		return c.e.Search(ctx, scheme, query, n)
 	}
-	c.render(w, r, http.StatusOK, "search", "Search: "+query, "search", sv)
+}
+
+// searchKey is the dedup key for a search job, distinct from a record fetch so a
+// query and a URI never collide.
+func searchKey(scheme, query string, n int) string {
+	return "search:" + scheme + ":" + strconv.Itoa(n) + ":" + query
+}
+
+// renderSearchLoading shows the loading screen for a slow query. Its reload target
+// is the search URL itself, so when the job is ready the reload renders the hits.
+func (c *Console) renderSearchLoading(w http.ResponseWriter, r *http.Request, scheme, query string, n int) {
+	c.render(w, r, http.StatusAccepted, "loading", "Searching "+scheme, "loading", loadingView{
+		URI:       query,
+		Scheme:    scheme,
+		Accent:    accent(scheme),
+		Kind:      "search results",
+		StatusURL: searchStatusURL(scheme, query, n),
+	})
 }
 
 // searchSchemes is the set of registered schemes that support search, for the

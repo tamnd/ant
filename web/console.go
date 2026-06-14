@@ -29,6 +29,7 @@ type Deref interface {
 	URL(u kit.URI) (string, error)
 	Get(ctx context.Context, u kit.URI) (kit.Envelope, error)
 	Dereference(ctx context.Context, u kit.URI, refresh bool) (ant.Fetched, error)
+	Lookup(u kit.URI) (ant.Fetched, bool)
 	Cached(u kit.URI) bool
 	BodyOf(env kit.Envelope) (string, bool)
 	List(ctx context.Context, u kit.URI, n int) ([]kit.Envelope, error)
@@ -55,19 +56,20 @@ type Console struct {
 	build  Build
 	tpl    map[string]*template.Template // page name -> base+partials+page
 	assets http.Handler                  // static file server over the embedded FS
+	jobs   *jobs                         // background fetch manager (dedup + retain)
 }
 
 // pages are the page templates under templates/pages; each is parsed together
 // with the shell and the partials into its own set (8000_ant_serve §6.3).
 var pages = []string{
 	"dashboard", "resource", "collection", "search", "links", "resolve",
-	"locate", "graph", "browse", "domain", "about", "error", "notfound",
+	"locate", "graph", "browse", "domain", "about", "loading", "error", "notfound",
 }
 
 // New parses every template against the embedded FS and returns a ready Console.
 // Parsing once at construction means no per-request template work.
 func New(e Deref, b Build) (*Console, error) {
-	c := &Console{e: e, build: b, tpl: map[string]*template.Template{}}
+	c := &Console{e: e, build: b, tpl: map[string]*template.Template{}, jobs: newJobs()}
 	for _, name := range pages {
 		t, err := template.New("base.html").Funcs(c.funcs()).ParseFS(files,
 			"templates/base.html",
@@ -130,6 +132,8 @@ func (c *Console) route(w http.ResponseWriter, r *http.Request) {
 		c.locate(w, r)
 	case "graph":
 		c.graph(w, r)
+	case "status":
+		c.status(w, r)
 	case "browse":
 		c.browse(w, r)
 	case "domain":

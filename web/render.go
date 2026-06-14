@@ -182,6 +182,39 @@ func domainHref(scheme string) string { return "/domain?scheme=" + url.QueryEsca
 func graphHref(uri string, depth int) string {
 	return "/graph?uri=" + url.QueryEscape(uri) + "&depth=" + strconv.Itoa(depth)
 }
+
+// statusURL builds the poller endpoint for a pending page, carrying the same
+// parameters fetchKey is built from so the status handler recomputes the identical
+// key and finds the page's own job.
+func statusURL(op, uri string, n, depth int, refresh bool) string {
+	v := url.Values{}
+	v.Set("op", op)
+	v.Set("uri", uri)
+	if n != 0 {
+		v.Set("n", strconv.Itoa(n))
+	}
+	if depth != 0 {
+		v.Set("depth", strconv.Itoa(depth))
+	}
+	if refresh {
+		v.Set("refresh", "1")
+	}
+	return "/status?" + v.Encode()
+}
+
+// searchStatusURL builds the poller endpoint for a pending search, keyed the same
+// way searchKey is, so the status handler finds the page's own query job.
+func searchStatusURL(scheme, query string, n int) string {
+	v := url.Values{}
+	v.Set("op", "search")
+	v.Set("on", scheme)
+	v.Set("q", query)
+	if n != 0 {
+		v.Set("n", strconv.Itoa(n))
+	}
+	return "/status?" + v.Encode()
+}
+
 func resolveHref(input, on string) string {
 	q := url.Values{}
 	q.Set("input", input)
