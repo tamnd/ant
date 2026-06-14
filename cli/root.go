@@ -15,6 +15,7 @@ import (
 	_ "github.com/tamnd/goodread-cli/goodread"
 	_ "github.com/tamnd/wikipedia-cli/wiki"
 	_ "github.com/tamnd/x-cli/x"
+	_ "github.com/tamnd/ytb-cli/youtube"
 )
 
 // Build metadata, set via -ldflags at release time.

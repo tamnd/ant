@@ -23,6 +23,8 @@ x://user/nasa
 x://status/20
 wikipedia://page/Alan_Turing
 wikipedia://category/Computability_theory
+youtube://video/dQw4w9WgXcQ
+youtube://channel/UCuAXFkgsw1L7xaCfnd5JJOw
 ```
 
 Every verb takes a URI and does one thing — `resolve` normalizes any id or URL
